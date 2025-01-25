@@ -1,4 +1,4 @@
-import utils as func;
+import src.utils.utils as func;
 
 def round_robin():
     # Entrada de dados

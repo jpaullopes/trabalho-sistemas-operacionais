@@ -1,86 +1,124 @@
-import src.utils.utils as func;
+from collections import deque # Importa a classe deque para a fila de prontos
+#tive que importar uma biblioteca para poder usar a função de criar uma filazinha
 
 def round_robin():
-    # Entrada de dados
-    n = int(input("Quantas tarefas (processos) você deseja simular? "))
-    tasks = []
+    # Entrada
+    #A gente pode colocar os dados em um .txt pra agilizar a leitura
+    n = int(input("Número de processos: "))
+    quantum = int(input("Valor do quantum: "))
     
-    for i in range(n):
-        arrival_time = int(input(f"Digite o tempo de ingresso da tarefa {i+1}: "))
-        duration = int(input(f"Digite a duração da tarefa {i+1}: "))
-        tasks.append({
-            'id': i+1,
-            'arrival_time': arrival_time,
-            'duration': duration,
-            'remaining_time': duration,
-            'waiting_time': 0,
-            'turnaround_time': 0
+    usar_contexto = input("Utilizar tempo de troca de contexto? (s/n): ").strip().lower()
+    if usar_contexto == 's':
+        tempo_contexto = int(input("Tempo de troca de contexto: "))
+    else:
+        tempo_contexto = 0
+    
+    # Criação da lista de processos.
+    # Cada processo é representado por um dicionário com:
+    # id, tempo de chegada, duração, tempo restante,tempo de início e tempo de fim dele.
+    processos = []
+    for i in range(1, n + 1):
+        print(f"\nProcesso {i}:")
+        chegada = int(input("  Tempo de chegada: "))
+        duracao = int(input("  Duração : "))
+        processos.append({
+            "id": i,
+            "chegada": chegada,
+            "duracao": duracao,
+            "restante": duracao,
+            "inicio": None,
+            "fim": None
         })
     
-    quantum = int(input("Digite o tempo de quantum (unidades de tempo): "))
-    context_switch = input("Você deseja considerar o tempo de troca de contexto? (s/n): ").lower()
+    # Lista de processos que ainda não foram enfileirados
+    # Já estão na ordem de criação (o que resolve o critério de desempate pelo id em caso de mesmo tempo de chegada)
+    # Essa parte do código é para garantir que os processos sejam enfileirados na ordem correta pra não dar o erro que tava dando antes
+    processos_nao_enfileirados = sorted(processos, key=lambda p: (p["chegada"], p["id"]))
     
-    if context_switch == 's':
-        context_duration = int(input("Digite a duração do tempo de troca de contexto (unidades de tempo): "))
-    else:
-        context_duration = 0
-
-    func.clean_screen();
-    func.loading_simulator(1.0);
-
-    # Simulação do algoritmo Round Robin
-    current_time = 0
-    queue = []
-    completed_tasks = 0
-    total_waiting_time = 0
-    total_turnaround_time = 0
+    tempo_atual = 0
+    fila_prontos = deque() # Fila de processos prontos para execução
     
-    while completed_tasks < n:
-        # Adiciona tarefas que chegaram no tempo atual
-        for task in tasks:
-            if task['arrival_time'] <= current_time and task not in queue and task['remaining_time'] > 0:
-                queue.append(task)
-
-        if queue:
-            task = queue.pop(0)
-
-            # Calcula o tempo de execução da tarefa com base no quantum
-            exec_time = min(task['remaining_time'], quantum)
-            current_time += exec_time
-
-            # Atualiza o tempo restante da tarefa
-            task['remaining_time'] -= exec_time
-            
-            # Se a tarefa não terminou, retorna para a fila
-            if task['remaining_time'] > 0:
-                queue.append(task)
+    # Função para inserir processos que chegaram até o tempo_atual na fila de prontos.
+    def inserir_processos():
+        nonlocal processos_nao_enfileirados, fila_prontos # Acessa as variáveis do escopo externo
+        # Obter processos cujo tempo de chegada é <= tempo_atual
+        processos_chegaram = [p for p in processos_nao_enfileirados if p["chegada"] <= tempo_atual]
+        # Se houverem, adiciona na ordem de chegada (e de id, pois já tão ordenados)
+        for p in processos_chegaram:
+            fila_prontos.append(p)
+        # Remove os processos que foram enfileirados
+        processos_nao_enfileirados = [p for p in processos_nao_enfileirados if p["chegada"] > tempo_atual]
+    
+    print("\n--- Início da simulação ---")
+    
+    # Loop principal: executa enquanto houver processos com tempo restante
+    while any(p["restante"] > 0 for p in processos):
+        # Insere na fila os processos que chegaram até o tempo atual
+        inserir_processos() # ele vai inserir os processos que chegaram até o tempo atual na fila de prontos
+        
+        # Se a fila estiver vazia, significa que nenhum processo chegou ainda; avança o tempo
+        if not fila_prontos:
+            if processos_nao_enfileirados:
+                tempo_atual = processos_nao_enfileirados[0]["chegada"]
+                inserir_processos()
             else:
-                # Tarefa concluída, calcula o tempo de vida e espera
-                task['turnaround_time'] = current_time - task['arrival_time']
-                task['waiting_time'] = task['turnaround_time'] - task['duration']
-                total_waiting_time += task['waiting_time']
-                total_turnaround_time += task['turnaround_time']
-                completed_tasks += 1
-
-            # Se há tempo de troca de contexto, adiciona ao tempo atual
-            if context_duration > 0 and queue:
-                current_time += context_duration
-
+                break  # Não há mais processos a serem executados
+        
+        # Seleciona o próximo processo da fila
+        processo_atual = fila_prontos.popleft()
+        
+        # Registra o tempo de início (primeira vez que o processo é executado)
+        if processo_atual["inicio"] is None:
+            processo_atual["inicio"] = tempo_atual
+        
+        # Executa o processo
+        #primeiro verifica se pelo menos o processo atual tem tempo restante maior que o quantum 
+        if processo_atual["restante"] > quantum:
+            # Executa por quantum unidades
+            print(f"Tempo {tempo_atual}: Processo {processo_atual['id']} executa por {quantum} unidades")
+            tempo_atual += quantum
+            processo_atual["restante"] -= quantum
+            # Após a execução, insere tempo de troca de contexto, se aplicável
+            if tempo_contexto > 0:
+                print(f"Tempo {tempo_atual}: Troca de contexto (+{tempo_contexto})")
+                tempo_atual += tempo_contexto
         else:
-            current_time += 1  # Se não houver tarefa pronta para execução, avança o tempo
-
+            # Executa pelo tempo restante (processo finaliza)
+            tempo_exec = processo_atual["restante"]
+            print(f"Tempo {tempo_atual}: Processo {processo_atual['id']} executa por {tempo_exec} unidades e finaliza")
+            tempo_atual += tempo_exec
+            processo_atual["restante"] = 0
+            processo_atual["fim"] = tempo_atual
+            # Se ainda existirem processos com tempo restante, inclui troca de contexto
+            if any(p["restante"] > 0 for p in processos):
+                if tempo_contexto > 0:
+                    print(f"Tempo {tempo_atual}: Troca de contexto (+{tempo_contexto})")
+                    tempo_atual += tempo_contexto
+        
+        # Durante a execução, podem ter chegado novos processos:
+        inserir_processos()
+        
+        # Se o processo atual ainda não terminou, reinsere-o na fila de prontos
+        if processo_atual["restante"] > 0:
+            fila_prontos.append(processo_atual)
+    
+    print("\n--- Fim da simulação ---\n")
+    
     # Exibe os resultados
-    print("\nResultados:")
-    for task in tasks:
-        print(f"Tarefa {task['id']}:")
-        print(f"  Tempo de vida: {task['turnaround_time']} u.t")
-        print(f"  Tempo de espera: {task['waiting_time']} u.t")
-    
-    avg_waiting_time = total_waiting_time / n
-    avg_turnaround_time = total_turnaround_time / n
-    
-    print(f"\nTempo médio de espera: {avg_waiting_time:.2f} u.t")
-    print(f"Tempo médio de vida: {avg_turnaround_time:.2f} u.t")
+    print("Processo\tChegada\tDuração\tInício\tFim\tVida\t\tEspera")
+    for p in sorted(processos, key=lambda x: x["id"]):
+        vida = p["fim"] - p["chegada"]
+        espera = vida - p["duracao"]
+        print(f"{p['id']}\t\t{p['chegada']}\t{p['duracao']}\t{p['inicio']}\t{p['fim']}\t{vida}\t\t{espera}")
+
+    # Cálculo dos tempos médios de espera e de execução (vida)
+    total_espera = sum((p["fim"] - p["chegada"] - p["duracao"]) for p in processos)
+    total_vida = sum((p["fim"] - p["chegada"]) for p in processos)
+    avg_espera = total_espera / len(processos)
+    avg_vida = total_vida / len(processos)
+    print('\n--- Médias ---')
+    print(f"Tempo médio de vida: {avg_vida:.2f}")
+    print(f"Tempo médio de espera: {avg_espera:.2f}")
 
 if __name__ == "__main__":
     round_robin()

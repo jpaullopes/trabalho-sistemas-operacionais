@@ -76,7 +76,7 @@ def main():
     print("Processo\tAlocado\t\tRequisição")
     for i in range(n_processos):
         print(f"P{i + 1}\t\t{alocado[i]}\t{precisa[i]}")
-    print("\nRecursos disponíveis:")
+    print("\nRecursos disponíveis: ")
     print(f"Disponivél: {disponivel}")
     
     # Verifica o estado seguro e exibe a sequência de execução
@@ -90,4 +90,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() # a main né
